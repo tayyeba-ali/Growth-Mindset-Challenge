@@ -1,119 +1,93 @@
-
 import streamlit as st
-from PyPDF2 import PdfReader, PdfWriter
-from PIL import Image
-import pdf2image
-import shutil
+import pandas as pd
 import os
-from io import BytesIO
+from io import BytesIO 
 
-st.set_page_config(page_title="📄 Document Converter & Organizer", layout="wide")
+st.set_page_config(page_title="Data Sweeper", layout="wide")
 
-# Poppler Check (Required for PDF to Image conversion)
-if not shutil.which("pdftoppm"):
-    st.error("Error: Poppler is not installed. Please add `poppler-utils` to `packages.txt` and redeploy.")
-    st.stop()
+# Custom CSS
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-color: black;
+        color: white;
+    }
+    </style>
+    """, 
+    unsafe_allow_html=True
+)
 
-# Title and Description
-st.title("📄 All-in-One Document Converter & Organizer")
-st.write("Easily convert images to PDFs, extract images from PDFs, merge multiple PDFs, or split a PDF into separate pages.")
+# Title & Description
+st.title("Datasweeper Sterling Integrator By Tayyeba Ali")
+st.write("Transform your file between CSV and Excel formats with built-in data cleaning and visualization. Creating the project for Quarter 3!")
 
-# Feature Selection
-option = st.radio("Select an option:", [
-    "📷 Image to PDF", 
-    "📄 PDF to Image", 
-    "📑 Merge PDFs", 
-    "✂️ Split PDF"
-])
+# File Upload
+uploaded_files = st.file_uploader("Upload your file (accepts CSV or Excel):", type=["csv", "xlsx"], accept_multiple_files=True)
 
-if option == "📷 Image to PDF":
-    st.subheader("📷 Convert Images to a Single PDF")
-    st.write("Upload multiple images (JPG or PNG), and merge them into a single PDF file.")
-    
-    uploaded_images = st.file_uploader("Upload Images", type=["jpg", "png"], accept_multiple_files=True)
+if uploaded_files:
+    for file in uploaded_files:
+        file_ext = os.path.splitext(file.name)[-1].lower()
 
-    if uploaded_images:
-        images = []
-        
-        # Convert images to RGB format
-        try:
-            for img in uploaded_images:
-                image = Image.open(img)
-                images.append(image.convert("RGB"))
-        except Exception as e:
-            st.error(f"❌ Image processing error: {str(e)}")
-        
-        if images and st.button("Convert to PDF"):
-            try:
-                pdf_buffer = BytesIO()
-                images[0].save(pdf_buffer, format="PDF", save_all=True, append_images=images[1:])
-                pdf_buffer.seek(0)
-                st.download_button("📥 Download PDF", pdf_buffer, "converted.pdf", "application/pdf")
-                st.success("✅ Your images have been successfully converted to PDF!")
-            except Exception as e:
-                st.error(f"⚠️ PDF conversion failed: {str(e)}")
+        if file_ext == ".csv":
+            df = pd.read_csv(file)
+        elif file_ext == ".xlsx":
+            df = pd.read_excel(file)
+        else:
+            st.error(f"File type not supported: {file_ext}")
+            continue
 
-# PDF to Image Conversion
-elif option == "📄 PDF to Image":
-    st.subheader("📄 Convert PDF to Images")
-    st.write("Upload a PDF file and extract each page as an image (PNG format).")
+        # File Details
+        st.write(f"🔍 Preview of {file.name}")
+        st.dataframe(df.head())
 
-    uploaded_pdf = st.file_uploader("Upload PDF", type=["pdf"])
+        # Data Cleaning Options
+        st.subheader("🛠️ Data Cleaning Options")
+        if st.checkbox(f"Clean data for {file.name}"):
+            col1, col2 = st.columns(2)
 
-    if uploaded_pdf:
-        try:
-            images = pdf2image.convert_from_bytes(uploaded_pdf.read())
-            for i, img in enumerate(images):
+            with col1:
+                if st.button(f"Remove duplicates from {file.name}"):
+                    df.drop_duplicates(inplace=True)
+                    st.write("✅ Duplicates removed!")
+
+            with col2:
+                if st.button(f"Fill missing values for {file.name}"):
+                    numeric_cols = df.select_dtypes(include=['number']).columns
+                    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
+                    st.write("✅ Missing values have been filled!")
+
+            # Column Selection
+            st.subheader("🎯 Select Columns to Keep")
+            columns = st.multiselect(f"Choose columns for {file.name}", df.columns, default=df.columns)
+            df = df[columns]
+
+            # Data Visualization
+            st.subheader("📊 Data Visualization")
+            if st.checkbox(f"Show visualization for {file.name}"):
+                st.bar_chart(df.select_dtypes(include='number').iloc[:, :2])
+
+            # Conversion Options
+            st.subheader("🔄️ Conversion Options")
+            conversion_type = st.radio(f"Convert {file.name} to:", ["CSV", "Excel"], key=file.name)
+            if st.button(f"Convert {file.name}"):
                 buffer = BytesIO()
-                img.save(buffer, format="PNG")
+                if conversion_type == "CSV":
+                    df.to_csv(buffer, index=False)
+                    file_name = file.name.replace(file_ext, ".csv")
+                    mime_type = "text/csv"
+                elif conversion_type == "Excel":
+                    df.to_excel(buffer, index=False)
+                    file_name = file.name.replace(file_ext, ".xlsx")
+                    mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
                 buffer.seek(0)
-                st.download_button(f"Download Page {i+1} as PNG", buffer, f"page_{i+1}.png", "image/png")
-            st.success("✅ Your PDF has been successfully converted to images!")
-        except Exception as e:
-            st.error(f"Error processing PDF: {e}")
 
-# Merge Multiple PDFs
-elif option == "📑 Merge PDFs":
-    st.subheader("📑 Merge Multiple PDFs into One")
-    st.write("Upload multiple PDF files and combine them into a single document.")
+                st.download_button(
+                    label=f"Download {file_name} as {conversion_type}",
+                    data=buffer,
+                    file_name=file_name,
+                    mime=mime_type
+                )
 
-    uploaded_pdfs = st.file_uploader("Upload PDFs", type=["pdf"], accept_multiple_files=True)
-
-    if uploaded_pdfs and st.button("Merge PDFs"):
-        merger = PdfWriter()
-        for pdf in uploaded_pdfs:
-            try:
-                merger.append(PdfReader(pdf))
-            except Exception as e:
-                st.error(f"Error merging PDF: {e}")
-
-        merged_pdf = BytesIO()
-        merger.write(merged_pdf)
-        merged_pdf.seek(0)
-        st.download_button("Download Merged PDF", merged_pdf, "merged.pdf", "application/pdf")
-        st.success("✅ Your PDFs have been successfully merged!")
-
-# Split a PDF into Multiple Pages
-elif option == "✂️ Split PDF":
-    st.subheader("✂️ Split PDF into Separate Pages")
-    st.write("Upload a PDF and download each page as a separate file.")
-
-    uploaded_pdf = st.file_uploader("Upload PDF to Split", type=["pdf"])
-
-    if uploaded_pdf:
-        try:
-            reader = PdfReader(uploaded_pdf)
-            for i, page in enumerate(reader.pages):
-                writer = PdfWriter()
-                writer.add_page(page)
-                pdf_buffer = BytesIO()
-                writer.write(pdf_buffer)
-                pdf_buffer.seek(0)
-                st.download_button(f"Download Page {i+1}", pdf_buffer, f"Page_{i+1}.pdf", "application/pdf")
-            st.success("✅ Your PDF has been successfully split into separate pages!")
-        except Exception as e:
-            st.error(f"Error processing PDF: {e}")
-
-# Footer 
-st.markdown("---")
-st.markdown("© 2025 All-in-One Document Converter & Organizer | Created by Tayyeba Ali")
+    st.success("🎉 All files processed successfully!")
