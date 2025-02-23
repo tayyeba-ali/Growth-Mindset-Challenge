@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 import os
-from io import BytesIO 
+from io import BytesIO
+import chardet  # For detecting encoding
 
 st.set_page_config(page_title="Data Sweeper", layout="wide")
 
@@ -29,10 +30,18 @@ if uploaded_files:
     for file in uploaded_files:
         file_ext = os.path.splitext(file.name)[-1].lower()
 
+        # Detect file encoding (for CSV)
         if file_ext == ".csv":
-            df = pd.read_csv(file)
+            rawdata = file.read(10000)
+            file.seek(0)  # Reset pointer
+            result = chardet.detect(rawdata)
+            encoding = result["encoding"] if result["encoding"] else "utf-8"
+
+            df = pd.read_csv(file, encoding=encoding, errors="replace")
+
         elif file_ext == ".xlsx":
             df = pd.read_excel(file)
+
         else:
             st.error(f"File type not supported: {file_ext}")
             continue
