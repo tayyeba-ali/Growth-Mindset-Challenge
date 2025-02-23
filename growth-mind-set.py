@@ -34,7 +34,11 @@ if uploaded_files:
             if file_ext == ".csv":
                 df = pd.read_csv(file)
             elif file_ext == ".xlsx":
-                df = pd.read_excel(file)
+                try:
+                    df = pd.read_excel(file, engine="openpyxl")
+                except ImportError:
+                    st.error("The 'openpyxl' package is required to read Excel files. Please install it using `pip install openpyxl`.")
+                    continue
             else:
                 st.error(f"File type not supported: {file_ext}")
                 continue
@@ -79,9 +83,13 @@ if uploaded_files:
                     file_name = file.name.replace(file_ext, ".csv")
                     mime_type = "text/csv"
                 elif conversion_type == "Excel":
-                    df.to_excel(buffer, index=False)
-                    file_name = file.name.replace(file_ext, ".xlsx")
-                    mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    try:
+                        df.to_excel(buffer, index=False, engine="openpyxl")
+                        file_name = file.name.replace(file_ext, ".xlsx")
+                        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    except ImportError:
+                        st.error("The 'openpyxl' package is required to write Excel files. Please install it using `pip install openpyxl`.")
+                        continue
 
                 buffer.seek(0)
 
